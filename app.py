@@ -321,9 +321,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
     
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=128, batch_size=1, num_workers=4, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=128, batch_size=1, num_workers=4, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=128, batch_size=1, num_workers=4, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=False)
     
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
@@ -402,6 +402,10 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
             train_pbar.set_description(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/(len(list_hyp_train)//batch_data[0].size(0)):.4f} LR: {get_lr(optimizer):.8f}")
+
+            # Hapus tensor yang tidak diperlukan untuk membebaskan memori
+            del batch_data, batch_hyp, batch_label, loss
+            torch.cuda.empty_cache()
         
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
         st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
@@ -421,6 +425,10 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
                 list_label.extend(batch_label)
                 val_pbar.set_description(f"VALID LOSS: {total_val_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
 
+                # Hapus tensor yang tidak diperlukan untuk membebaskan memori
+                del batch_data, batch_hyp, batch_label, loss
+                torch.cuda.empty_cache()
+
         metrics = document_sentiment_metrics_fn(list_hyp, list_label)
         st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/len(val_loader):.4f} {metrics_to_string(metrics)}")
         history['val_acc'].append(metrics['ACC'])
@@ -439,6 +447,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
         del train_pbar
         del val_pbar
+        torch.cuda.empty_cache()
         gc.collect()
 
     model.load_state_dict(torch.load('best_model_bert_finetuned.pt'))
@@ -457,6 +466,10 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             list_label.extend(batch_label)
             test_pbar.set_description(f"TEST LOSS: {total_test_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
 
+            # Hapus tensor yang tidak diperlukan untuk membebaskan memori
+            del batch_data, batch_hyp, batch_label, loss
+            torch.cuda.empty_cache()
+
     metrics = document_sentiment_metrics_fn(list_hyp, list_label)
     st.write(f"TEST LOSS: {total_test_loss/len(test_loader):.4f} {metrics_to_string(metrics)}")
     history['test_acc'].append(metrics['ACC'])
@@ -467,6 +480,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
     # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
     del test_pbar
+    torch.cuda.empty_cache()
     gc.collect()
 
     return history, test_df
