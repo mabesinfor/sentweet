@@ -11,6 +11,7 @@ import datetime
 import time
 import math
 from nlpaug.augmenter.word import SynonymAug
+import gc
 
 # NLP
 import nltk
@@ -310,9 +311,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
     
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=512, batch_size=32, num_workers=8, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=512, batch_size=32, num_workers=8, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=512, batch_size=32, num_workers=8, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=512, batch_size=8, num_workers=8, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=512, batch_size=8, num_workers=8, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=512, batch_size=8, num_workers=8, shuffle=False)
     
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
@@ -347,7 +348,10 @@ def eval_model_bert_unoptimized(model, val_loader, i2w):
         progress = (i + 1) / total_batches
         progress_bar.progress(progress)
         progress_text.text(f'Progress: {int(progress * 100)}% ({i + 1}/{total_batches} batches)')
-        
+    
+    del val_loader, batch_data
+    gc.collect()
+    
     conf_matrix = confusion_matrix(list_label_unoptimized, list_hyp_unoptimized)
     plt.figure(figsize=(10, 8))
     sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=[i2w[idx] for idx in range(len(i2w))], yticklabels=[i2w[idx] for idx in range(len(i2w))])
