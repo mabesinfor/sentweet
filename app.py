@@ -15,7 +15,6 @@ import gc
 
 # NLP
 import nltk
-nltk.download('punkt')
 from nltk.probability import FreqDist
 from nltk.tokenize import word_tokenize
 import emoji
@@ -301,6 +300,15 @@ def load_model_bert():
     )
     return tokenizer, model
 
+@st.cache_resource
+def download_nltk_resources():
+    nltk.download('punkt')
+    nltk.download('wordnet')
+    nltk.download('averaged_perceptron_tagger')
+
+download_nltk_resources()
+
+@st.cache_resource
 def prepare():
     train_set_path = 'train_set.tsv'
     val_set_path = 'val_set.tsv'
@@ -311,9 +319,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
     
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=512, batch_size=8, num_workers=8, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=512, batch_size=8, num_workers=8, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=512, batch_size=8, num_workers=8, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=128, batch_size=4, num_workers=4, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=128, batch_size=4, num_workers=4, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=128, batch_size=4, num_workers=4, shuffle=False)
     
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
