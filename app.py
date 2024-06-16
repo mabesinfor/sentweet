@@ -378,7 +378,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
-    n_epochs = 5
+    n_epochs = 3  # Kurangi jumlah epochs
     history = defaultdict(list)
     patience = 2
     best_val_loss = float('inf')
@@ -389,7 +389,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         total_train_loss = 0
         list_hyp_train, list_label = [], []
         train_pbar = tqdm(train_loader, leave=True, total=len(train_loader))
-        
+
         for batch_data in train_pbar:
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
             optimizer.zero_grad()
@@ -402,7 +402,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
             train_pbar.set_description(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/(len(list_hyp_train)//batch_data[0].size(0)):.4f} LR: {get_lr(optimizer):.8f}")
-        
+
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
         st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
         history['train_acc'].append(metrics['ACC'])
@@ -410,7 +410,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         model.eval()
         total_val_loss = 0
         list_hyp, list_label = [], []
-        
+
         with torch.no_grad():
             val_pbar = tqdm(val_loader, leave=False, total=len(val_loader))
             for batch_data in val_pbar:
@@ -424,24 +424,29 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         metrics = document_sentiment_metrics_fn(list_hyp, list_label)
         st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/len(val_loader):.4f} {metrics_to_string(metrics)}")
         history['val_acc'].append(metrics['ACC'])
-        
+
         if total_val_loss < best_val_loss:
             best_val_loss = total_val_loss
             patience_counter = 0
             torch.save(model.state_dict(), 'best_model_bert_finetuned.pt')
         else:
             patience_counter += 1
-        
+
         if patience_counter >= patience:
             st.write(f'Early stopping on epoch {epoch+1}')
             break
 
+        # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
+        del train_pbar
+        del val_pbar
+        gc.collect()
+
     model.load_state_dict(torch.load('best_model_bert_finetuned.pt'))
-    
+
     model.eval()
     total_test_loss = 0
     list_hyp, list_label = [], []
-    
+
     with torch.no_grad():
         test_pbar = tqdm(test_loader, leave=False, total=len(test_loader))
         for batch_data in test_pbar:
@@ -459,6 +464,10 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     test_df = pd.read_csv('test_set.tsv', sep='\t', names=['tweet', 'sentiment'])
     test_df['pred'] = list_hyp
     test_df.to_csv('test_set_pred.csv', index=False)
+
+    # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
+    del test_pbar
+    gc.collect()
 
     return history, test_df
 
