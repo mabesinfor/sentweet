@@ -382,105 +382,85 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     history = defaultdict(list)
     patience = 2
     best_val_loss = float('inf')
-    best_test_loss = float('inf')
     patience_counter = 0
-    
+
     for epoch in range(n_epochs):
         model.train()
-        torch.set_grad_enabled(True)
         total_train_loss = 0
         list_hyp_train, list_label = [], []
         train_pbar = tqdm(train_loader, leave=True, total=len(train_loader))
         
-        for i, batch_data in enumerate(train_pbar):
+        for batch_data in train_pbar:
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
-            loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            tr_loss = loss.item()
-            total_train_loss = total_train_loss + tr_loss
-            list_hyp_train += batch_hyp
-            list_label += batch_label
-            train_pbar.set_description(f"(Epoch {epoch+1}) TRAIN LOSS:{total_train_loss/(i+1):.4f} LR:{get_lr(optimizer):.8f}")
+            with torch.set_grad_enabled(True):
+                loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
+                loss.backward()
+                optimizer.step()
+
+            total_train_loss += loss.item()
+            list_hyp_train.extend(batch_hyp)
+            list_label.extend(batch_label)
+            train_pbar.set_description(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/(len(list_hyp_train)//batch_data[0].size(0)):.4f} LR: {get_lr(optimizer):.8f}")
         
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
-        st.write(f"(Epoch {epoch+1}) TRAIN LOSS:{total_train_loss/(i+1):.4f} {metrics_to_string(metrics)} LR:{get_lr(optimizer):.8f}")
+        st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
         history['train_acc'].append(metrics['ACC'])
+
         model.eval()
-        torch.set_grad_enabled(False)
-        total_loss = 0
+        total_val_loss = 0
         list_hyp, list_label = [], []
-        pbar = tqdm(val_loader, leave=False, total=len(val_loader))
         
-        for i, batch_data in enumerate(pbar):
-            batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
-            loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
-            valid_loss = loss.item()
-            total_loss = total_loss + valid_loss
-            list_hyp += batch_hyp
-            list_label += batch_label
-            metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-            pbar.set_description(f"VALID LOSS:{total_loss/(i+1):.4f} {metrics_to_string(metrics)}")
+        with torch.no_grad():
+            val_pbar = tqdm(val_loader, leave=False, total=len(val_loader))
+            for batch_data in val_pbar:
+                batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
+                loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
+                total_val_loss += loss.item()
+                list_hyp.extend(batch_hyp)
+                list_label.extend(batch_label)
+                val_pbar.set_description(f"VALID LOSS: {total_val_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
 
         metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-        st.write(f"(Epoch {epoch+1}) VALID LOSS:{total_loss/(i+1):.4f} {metrics_to_string(metrics)}")
+        st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/len(val_loader):.4f} {metrics_to_string(metrics)}")
         history['val_acc'].append(metrics['ACC'])
         
-        if total_loss < best_val_loss:
-            best_val_loss = total_loss
+        if total_val_loss < best_val_loss:
+            best_val_loss = total_val_loss
             patience_counter = 0
-            torch.save(model.state_dict(), 'best_model_bert_finetuned_val.pt')
+            torch.save(model.state_dict(), 'best_model_bert_finetuned.pt')
         else:
             patience_counter += 1
         
         if patience_counter >= patience:
             st.write(f'Early stopping on epoch {epoch+1}')
             break
-        
-        val_df = pd.read_csv('val_set.tsv', sep='\t', names=['tweet', 'sentiment'])
-        val_df['pred'] = list_hyp
-        val_df.head()
-        val_df.to_csv('val_set_pred.csv', index=False)
-        
-        model.load_state_dict(torch.load('best_model_bert_finetuned_val.pt'))
-        model.eval()
-        torch.set_grad_enabled(False)
-        total_loss, total_correct, total_labels = 0, 0, 0
-        list_hyp, list_label = [], []
-        pbar = tqdm(test_loader, leave=False, total=len(test_loader))
-        
-        for i, batch_data in enumerate(pbar):
+
+    model.load_state_dict(torch.load('best_model_bert_finetuned.pt'))
+    
+    model.eval()
+    total_test_loss = 0
+    list_hyp, list_label = [], []
+    
+    with torch.no_grad():
+        test_pbar = tqdm(test_loader, leave=False, total=len(test_loader))
+        for batch_data in test_pbar:
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
             loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
-            valid_loss = loss.item()
-            total_loss = total_loss + valid_loss
-            list_hyp += batch_hyp
-            list_label += batch_label
-            metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-            pbar.set_description(f"TEST LOSS:{total_loss/(i+1):.4f} {metrics_to_string(metrics)}")
-                   
-        metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-        st.write(f"(Epoch {epoch+1}) TEST LOSS:{total_loss/(i+1):.4f} {metrics_to_string(metrics)}")
-        history['test_acc'].append(metrics['ACC'])
-        
-        if total_loss < best_test_loss:
-            best_test_loss = total_loss
-            patience_counter = 0
-            torch.save(model.state_dict(), 'best_model_bert_finetuned_test.pt')
-        else:
-            patience_counter += 1
+            total_test_loss += loss.item()
+            list_hyp.extend(batch_hyp)
+            list_label.extend(batch_label)
+            test_pbar.set_description(f"TEST LOSS: {total_test_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
 
-        if patience_counter >= patience:
-            st.write(f'Early stopping on epoch {epoch+1}')
-            break
-        
-        test_df = pd.read_csv('test_set.tsv', sep='\t', names=['tweet', 'sentiment'])
-        test_df['pred'] = list_hyp
-        test_df.head()
-        test_df.to_csv('test_set_pred.csv', index=False)
+    metrics = document_sentiment_metrics_fn(list_hyp, list_label)
+    st.write(f"TEST LOSS: {total_test_loss/len(test_loader):.4f} {metrics_to_string(metrics)}")
+    history['test_acc'].append(metrics['ACC'])
 
-    return history, val_df, test_df
+    test_df = pd.read_csv('test_set.tsv', sep='\t', names=['tweet', 'sentiment'])
+    test_df['pred'] = list_hyp
+    test_df.to_csv('test_set_pred.csv', index=False)
+
+    return history, test_df
 
 def learning_curve(history):
     plt.figure(figsize=(8, 6))
