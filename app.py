@@ -37,6 +37,8 @@ from indonlu.utils.data_utils import DocumentSentimentDataset, DocumentSentiment
 from indonlu.utils.forward_fn import forward_sequence_classification
 from indonlu.utils.metrics import document_sentiment_metrics_fn
 
+st.set_page_config(page_title="Sentweet", layout="centered", page_icon="🐦")
+
 def crawl_twitter_data(auth_token, search_keyword, limit, filename, start_date=None, end_date=None):
     if not os.path.exists('tweet-harvest'):
         os.system("npm install --global tweet-harvest@2.6.1")
@@ -542,7 +544,6 @@ def test_model_bert_finetuned(tokenizer, model, texts, i2w):
     return results
 
 def main():
-    st.set_page_config(page_title="Sentweet", layout="centered", page_icon="🐦")
     st.html("<div style='display: flex; align-items: center'><img src='https://cdn-icons-png.flaticon.com/512/2525/2525779.png' width='64'><h1>Sentweet</h1></div>")
     st.caption("Created by: [Kelompok 10](https://x.com/sendomoka) Inspired by: [Helmi Satria](https://x.com/helmisatria_)")
     st.html("Aplikasi untuk crawl tweet <code>berbahasa Indonesia</code> berdasarkan keyword dan akan dianalisis sentimennya, pre-trained model BERT dan Naive Bayes.")
