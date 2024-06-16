@@ -12,4 +12,3 @@ torch
 transformers
 tqdm
 nlpaug
-indonlu
