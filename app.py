@@ -39,6 +39,14 @@ from indonlu.utils.metrics import document_sentiment_metrics_fn
 
 st.set_page_config(page_title="Sentweet", layout="centered", page_icon="🐦")
 
+@st.cache_resource
+def download_nltk_resources():
+    nltk.download('punkt')
+    nltk.download('wordnet')
+    nltk.download('averaged_perceptron_tagger')
+
+download_nltk_resources()
+
 def crawl_twitter_data(auth_token, search_keyword, limit, filename, start_date=None, end_date=None):
     if not os.path.exists('tweet-harvest'):
         os.system("npm install --global tweet-harvest@2.6.1")
@@ -303,14 +311,6 @@ def load_model_bert():
     return tokenizer, model
 
 @st.cache_resource
-def download_nltk_resources():
-    nltk.download('punkt')
-    nltk.download('wordnet')
-    nltk.download('averaged_perceptron_tagger')
-
-download_nltk_resources()
-
-@st.cache_resource
 def prepare():
     train_set_path = 'train_set.tsv'
     val_set_path = 'val_set.tsv'
@@ -321,9 +321,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
     
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=128, batch_size=4, num_workers=4, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=128, batch_size=4, num_workers=4, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=128, batch_size=4, num_workers=4, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=128, batch_size=2, num_workers=4, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=128, batch_size=2, num_workers=4, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=128, batch_size=2, num_workers=4, shuffle=False)
     
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
@@ -544,6 +544,7 @@ def test_model_bert_finetuned(tokenizer, model, texts, i2w):
     return results
 
 def main():
+    download_nltk_resources()
     st.html("<div style='display: flex; align-items: center'><img src='https://cdn-icons-png.flaticon.com/512/2525/2525779.png' width='64'><h1>Sentweet</h1></div>")
     st.caption("Created by: [Kelompok 10](https://x.com/sendomoka) Inspired by: [Helmi Satria](https://x.com/helmisatria_)")
     st.html("Aplikasi untuk crawl tweet <code>berbahasa Indonesia</code> berdasarkan keyword dan akan dianalisis sentimennya, pre-trained model BERT dan Naive Bayes.")
