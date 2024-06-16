@@ -378,7 +378,13 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
-    n_epochs = 3  # Kurangi jumlah epochs
+    n_epochs = 3
+
+    # Hitung ukuran batch secara manual
+    train_batch_size = int(len(train_loader.dataset) * 0.1)  # Menggunakan 10% dari ukuran dataset sebagai batch size
+    val_batch_size = int(len(val_loader.dataset) * 0.1)
+    test_batch_size = int(len(test_loader.dataset) * 0.1)
+
     history = defaultdict(list)
     patience = 2
     best_val_loss = float('inf')
@@ -388,9 +394,11 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         model.train()
         total_train_loss = 0
         list_hyp_train, list_label = [], []
-        train_pbar = tqdm(train_loader, leave=True, total=len(train_loader))
 
-        for batch_data in train_pbar:
+        # Iterasi melalui dataset dengan ukuran batch yang dihitung secara manual
+        train_iter = iter(train_loader)
+        for _ in range(train_batch_size):
+            batch_data = next(train_iter)
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
             optimizer.zero_grad()
             with torch.set_grad_enabled(True):
@@ -401,14 +409,14 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             total_train_loss += loss.item()
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
-            train_pbar.set_description(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/(len(list_hyp_train)//batch_data[0].size(0)):.4f} LR: {get_lr(optimizer):.8f}")
+            st.text(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/(len(list_hyp_train)//batch_data[0].size(0)):.4f} LR: {get_lr(optimizer):.8f}")
 
             # Hapus tensor yang tidak diperlukan untuk membebaskan memori
             del batch_data, batch_hyp, batch_label, loss
             torch.cuda.empty_cache()
-        
+
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
-        st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
+        st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/train_batch_size:.4f} {metrics_to_string(metrics)}")
         history['train_acc'].append(metrics['ACC'])
 
         model.eval()
@@ -416,21 +424,23 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         list_hyp, list_label = [], []
 
         with torch.no_grad():
-            val_pbar = tqdm(val_loader, leave=False, total=len(val_loader))
-            for batch_data in val_pbar:
+            # Iterasi melalui dataset dengan ukuran batch yang dihitung secara manual
+            val_iter = iter(val_loader)
+            for _ in range(val_batch_size):
+                batch_data = next(val_iter)
                 batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
                 loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
                 total_val_loss += loss.item()
                 list_hyp.extend(batch_hyp)
                 list_label.extend(batch_label)
-                val_pbar.set_description(f"VALID LOSS: {total_val_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
+                st.text(f"VALID LOSS: {total_val_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
 
                 # Hapus tensor yang tidak diperlukan untuk membebaskan memori
                 del batch_data, batch_hyp, batch_label, loss
                 torch.cuda.empty_cache()
 
         metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-        st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/len(val_loader):.4f} {metrics_to_string(metrics)}")
+        st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/val_batch_size:.4f} {metrics_to_string(metrics)}")
         history['val_acc'].append(metrics['ACC'])
 
         if total_val_loss < best_val_loss:
@@ -445,8 +455,8 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             break
 
         # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
-        del train_pbar
-        del val_pbar
+        del train_iter
+        del val_iter
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -457,21 +467,23 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     list_hyp, list_label = [], []
 
     with torch.no_grad():
-        test_pbar = tqdm(test_loader, leave=False, total=len(test_loader))
-        for batch_data in test_pbar:
+        # Iterasi melalui dataset dengan ukuran batch yang dihitung secara manual
+        test_iter = iter(test_loader)
+        for _ in range(test_batch_size):
+            batch_data = next(test_iter)
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
             loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
             total_test_loss += loss.item()
             list_hyp.extend(batch_hyp)
             list_label.extend(batch_label)
-            test_pbar.set_description(f"TEST LOSS: {total_test_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
+            st.text(f"TEST LOSS: {total_test_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
 
             # Hapus tensor yang tidak diperlukan untuk membebaskan memori
             del batch_data, batch_hyp, batch_label, loss
             torch.cuda.empty_cache()
 
     metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-    st.write(f"TEST LOSS: {total_test_loss/len(test_loader):.4f} {metrics_to_string(metrics)}")
+    st.write(f"TEST LOSS: {total_test_loss/test_batch_size:.4f} {metrics_to_string(metrics)}")
     history['test_acc'].append(metrics['ACC'])
 
     test_df = pd.read_csv('test_set.tsv', sep='\t', names=['tweet', 'sentiment'])
@@ -479,7 +491,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     test_df.to_csv('test_set_pred.csv', index=False)
 
     # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
-    del test_pbar
+    del test_iter
     torch.cuda.empty_cache()
     gc.collect()
 
