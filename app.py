@@ -321,9 +321,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
     
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=0.1, num_workers=4, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=0.1, num_workers=4, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=0.1, num_workers=4, shuffle=False)
+    #train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=True)
+    #val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=False)
+    #test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=False)
     
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
@@ -383,6 +383,16 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     patience = 2
     best_val_loss = float('inf')
     patience_counter = 0
+
+    # Hitung ukuran batch secara manual
+    train_batch_size = int(len(train_set) * 0.1)  # Menggunakan 10% dari ukuran dataset sebagai batch size
+    val_batch_size = int(len(val_set) * 0.1)
+    test_batch_size = int(len(test_set) * 0.1)
+
+    # Buat DataLoader baru dengan torch.utils.data.DataLoader
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=train_batch_size, shuffle=True, num_workers=4)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=val_batch_size, shuffle=False, num_workers=4)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=test_batch_size, shuffle=False, num_workers=4)
 
     for epoch in range(n_epochs):
         model.train()
