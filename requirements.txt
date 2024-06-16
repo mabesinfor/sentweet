@@ -1,0 +1,15 @@
+streamlit
+pandas
+numpy
+scikit-learn
+collections-extended
+nltk
+emoji
+matplotlib
+seaborn
+wordcloud
+torch
+transformers
+tqdm
+nlpaug
+indonlu
