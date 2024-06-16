@@ -321,9 +321,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
     
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=0.1, num_workers=4, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=0.1, num_workers=4, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=0.1, num_workers=4, shuffle=False)
     
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
