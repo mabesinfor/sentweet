@@ -63,12 +63,12 @@ def labeling(df, sentiment_analysis, label_index):
     df['sentiment'] = df['sentiment'].map(label_index)
     return df
 
-def donut(sizes, ax, angle=90, labels=None,colors=None, explode=None, shadow=None):
+def donut(sizes, ax, angle=90, labels=None, colors=None, explode=None, shadow=None):
     patches, texts, autotexts = ax.pie(sizes, colors=colors, labels=labels, autopct='%1.1f%%',
                                        startangle=angle, pctdistance=0.8, explode=explode,
                                        wedgeprops=dict(width=0.4), shadow=shadow)
     for i, autotext in enumerate(autotexts):
-        autotext.set_text(f"{sizes[i]}\n({autotext.get_text()})")
+        autotext.set_text(f"{sizes.iloc[i]}\n({autotext.get_text()})")
     plt.axis('equal')
     plt.tight_layout()
 
@@ -153,7 +153,7 @@ def tokenization(df):
 
 def normalization(df):
     kamus_alay = pd.read_csv('kamus_alay.csv')
-    normalize_word_dict = {row[0]: row[1] for index, row in kamus_alay.iterrows()}
+    normalize_word_dict = {row.iloc[0]: row.iloc[1] for index, row in kamus_alay.iterrows()}
 
     def normalize_tweet(text):
         return [normalize_word_dict[term] if term in normalize_word_dict else term for term in text]
