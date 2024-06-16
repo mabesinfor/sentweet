@@ -321,9 +321,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
     
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=128, batch_size=2, num_workers=4, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=128, batch_size=2, num_workers=4, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=128, batch_size=2, num_workers=4, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=128, batch_size=1, num_workers=4, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=128, batch_size=1, num_workers=4, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=128, batch_size=1, num_workers=4, shuffle=False)
     
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
@@ -402,7 +402,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
             train_pbar.set_description(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/(len(list_hyp_train)//batch_data[0].size(0)):.4f} LR: {get_lr(optimizer):.8f}")
-
+        
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
         st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
         history['train_acc'].append(metrics['ACC'])
