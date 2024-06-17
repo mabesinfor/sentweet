@@ -33,7 +33,7 @@ import torch.nn.functional as F
 from torch import optim
 from tqdm import tqdm
 
-from transformers import BertForSequenceClassification, BertConfig, BertTokenizer, pipeline, AutoModelForSequenceClassification, AutoTokenizer, DistilBertForSequenceClassification, DistilBertTokenizer
+from transformers import BertForSequenceClassification, BertConfig, BertTokenizer, pipeline, AutoModelForSequenceClassification, AutoTokenizer
 from indonlu.utils.data_utils import DocumentSentimentDataset, DocumentSentimentDataLoader
 from indonlu.utils.forward_fn import forward_sequence_classification
 from indonlu.utils.metrics import document_sentiment_metrics_fn
@@ -300,16 +300,12 @@ def metrics_to_string(metric_dict):
 
 @st.cache_resource
 def load_model_bert():
-    #tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
-    #config = BertConfig.from_pretrained('indobenchmark/indobert-base-p1')
-    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-    config = BertConfig.from_pretrained('distilbert-base-uncased')
+    tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
+    config = BertConfig.from_pretrained('indobenchmark/indobert-base-p1')
     config.num_labels = DocumentSentimentDataset.NUM_LABELS
 
-    #model = BertForSequenceClassification.from_pretrained(
-        #'indobenchmark/indobert-base-p1',
-    model = DistilBertForSequenceClassification.from_pretrained(
-        'distilbert-base-uncased',
+    model = BertForSequenceClassification.from_pretrained(
+        'indobenchmark/indobert-base-p1',
         config=config,
         ignore_mismatched_sizes=True
     )
