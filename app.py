@@ -660,7 +660,8 @@ def main():
             set_seed(27)
             train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model = prepare()
         
-            if not train_loader or not val_loader or not test_loader:
+            # Tambahkan pengecekan ini
+            if None in (train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model):
                 st.error("Data loaders are not initialized properly. Please check the data preparation step.")
                 return
         
