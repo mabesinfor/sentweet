@@ -40,10 +40,7 @@ from indonlu.utils.metrics import document_sentiment_metrics_fn
 
 st.set_page_config(page_title="Sentweet", layout="centered", page_icon="🐦")
 
-def is_production_url():
-    url = os.getenv("APP_URL", "")
-    st.write(f"Environment variable APP_URL: {url}")  # Debug statement
-    return url == "https://soeara-sentweet.streamlit.app/"
+#def is_production_url():
     
 def crawl_twitter_data(auth_token, search_keyword, limit, filename, start_date=None, end_date=None):
     if not os.path.exists('tweet-harvest'):
@@ -593,16 +590,16 @@ def conf_class_finetuned_prod():
     st.code(classification_report(test_real, test_pred, target_names=['positive', 'neutral', 'negative']))
 
 def main():
+    environment = st.secrets["general"].get("ENVIRONMENT", "localhost")
+    if environment == 'production':
+        st.write("Aplikasi berjalan di production (Streamlit Community Cloud).")
+    else:
+        st.write("Aplikasi berjalan di localhost.")
     st.html("<div style='display: flex; align-items: center'><img src='https://cdn-icons-png.flaticon.com/512/2525/2525779.png' width='64'><h1>Sentweet</h1></div>")
     st.caption("Created by: [Kelompok 10](https://x.com/sendomoka) Inspired by: [Helmi Satria](https://x.com/helmisatria_)")
     st.html("Aplikasi untuk crawl tweet <code>berbahasa Indonesia</code> berdasarkan keyword dan akan dianalisis sentimennya, pre-trained model BERT dan Naive Bayes.")
     tabs = st.tabs(["Crawling + Sentiment Analysis", "Upload CSV + Sentiment Analysis"])
-    if is_production_url():
-        st.code("Running in production environment")
-    else:
-        st.code("Running in development environment")
 
-    
     with tabs[0]:
         # Tab untuk crawling dan analisis sentimen
         st.info("Pastikan Anda sudah login ke Twitter dan mendapatkan auth token, jika belum, silahkan login terlebih dahulu ke Twitter kemudian inspect element > application > cookies > auth_token > value")
