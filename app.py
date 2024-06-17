@@ -388,9 +388,13 @@ def eval_model_bert_unoptimized(model, val_loader, i2w):
     return list_hyp_unoptimized, list_label_unoptimized
 
 def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w):
+    # Tambahkan debug statement ini
     if val_loader is None:
         st.error("Validation loader is not initialized.")
         return None, None
+
+    # Debug statement tambahan untuk memeriksa panjang val_loader
+    st.write(f"Val loader: {len(val_loader)} batches")  
 
     device = 'cpu'
     model.to(device)
@@ -432,7 +436,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         list_hyp, list_label = [], []
 
         with torch.no_grad():
-            for batch_data in val_loader:
+            for batch_data in val_loader:  # Pastikan val_loader bukan None
                 batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
                 loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
                 total_val_loss += loss.item()
@@ -457,10 +461,6 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         if patience_counter >= patience:
             st.write(f'Early stopping on epoch {epoch+1}')
             break
-
-        del val_loader
-        gc.collect()
-        torch.cuda.empty_cache()
 
     model.load_state_dict(torch.load('best_model_bert_finetuned.pt'))
 
