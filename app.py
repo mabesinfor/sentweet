@@ -41,8 +41,10 @@ from indonlu.utils.metrics import document_sentiment_metrics_fn
 st.set_page_config(page_title="Sentweet", layout="centered", page_icon="🐦")
 
 def is_production_url():
-    return st.secrets.get("url", "") == "https://soeara-sentweet.streamlit.app/"
-
+    url = st.secrets.get("url", "")
+    st.write(f"st.secrets url: {url}")
+    return url == "https://soeara-sentweet.streamlit.app/"
+    
 def crawl_twitter_data(auth_token, search_keyword, limit, filename, start_date=None, end_date=None):
     if not os.path.exists('tweet-harvest'):
         os.system("npm install --global tweet-harvest@2.6.1")
