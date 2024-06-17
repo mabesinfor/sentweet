@@ -4,17 +4,18 @@ import numpy as np
 import re
 import os
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
 from collections import defaultdict
 import datetime
 import time
 import math
 from nlpaug.augmenter.word import SynonymAug
-import gc
-import psutil
+import json
 
 # NLP
 import nltk
+nltk.download('punkt')
 from nltk.probability import FreqDist
 from nltk.tokenize import word_tokenize
 import emoji
@@ -25,7 +26,7 @@ import seaborn as sns
 import matplotlib as mpl
 from wordcloud import WordCloud
 
-# Model IndoBERT
+#Model IndoBERT
 import random
 import torch
 import torch.nn.functional as F
@@ -39,13 +40,8 @@ from indonlu.utils.metrics import document_sentiment_metrics_fn
 
 st.set_page_config(page_title="Sentweet", layout="centered", page_icon="🐦")
 
-@st.cache_resource
-def download_nltk_resources():
-    nltk.download('punkt')
-    nltk.download('wordnet')
-    nltk.download('averaged_perceptron_tagger')
-
-download_nltk_resources()
+def is_production_url():
+    return st.secrets["url"] == "https://soeara-sentweet.streamlit.app/"
 
 def crawl_twitter_data(auth_token, search_keyword, limit, filename, start_date=None, end_date=None):
     if not os.path.exists('tweet-harvest'):
@@ -73,12 +69,12 @@ def labeling(df, sentiment_analysis, label_index):
     df['sentiment'] = df['sentiment'].map(label_index)
     return df
 
-def donut(sizes, ax, angle=90, labels=None, colors=None, explode=None, shadow=None):
+def donut(sizes, ax, angle=90, labels=None,colors=None, explode=None, shadow=None):
     patches, texts, autotexts = ax.pie(sizes, colors=colors, labels=labels, autopct='%1.1f%%',
                                        startangle=angle, pctdistance=0.8, explode=explode,
                                        wedgeprops=dict(width=0.4), shadow=shadow)
     for i, autotext in enumerate(autotexts):
-        autotext.set_text(f"{sizes.iloc[i]}\n({autotext.get_text()})")
+        autotext.set_text(f"{sizes[i]}\n({autotext.get_text()})")
     plt.axis('equal')
     plt.tight_layout()
 
@@ -136,7 +132,7 @@ def data_cleaning(df):
         # hapus emoticon
         text = re.sub(r"([xX;:]'?[dDpPvVoO3)(])", ' ', text)
         # hapus link
-        text = re.sub(r"(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[aA-Z0-9]+\.[^\s]{2,})", "", text)
+        text = re.sub(r"(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})", "", text)
         # hapus usename
         text = re.sub(r"@[^\s]+[\s]?", ' ', text)
         # hapus hashtag
@@ -163,7 +159,7 @@ def tokenization(df):
 
 def normalization(df):
     kamus_alay = pd.read_csv('kamus_alay.csv')
-    normalize_word_dict = {row.iloc[0]: row.iloc[1] for index, row in kamus_alay.iterrows()}
+    normalize_word_dict = {row[0]: row[1] for index, row in kamus_alay.iterrows()}
 
     def normalize_tweet(text):
         return [normalize_word_dict[term] if term in normalize_word_dict else term for term in text]
@@ -236,11 +232,10 @@ def plot_word_frequency(corpus_freq):
 
 def plot_word_cloud(corpus):
     f, ax2 = plt.subplots(1, figsize=(15, 5))
-    ax2.set_title('Word Cloud in Train Data')  # Corrected method name
+    ax2.set_title('Word Cloud in Train Data')
     ax2.tick_params(axis='x', rotation=45)
     wordcloud = WordCloud(max_font_size=50, max_words=100, background_color="white").generate(corpus)
     ax2.imshow(wordcloud, interpolation="bilinear")
-    ax2.axis('off')  # Hide axes for better display of the word cloud
     st.pyplot(f)
 
 def split_and_save_data(df_normalized_augmented):
@@ -311,34 +306,21 @@ def load_model_bert():
     )
     return tokenizer, model
 
-@st.cache_resource
 def prepare():
     train_set_path = 'train_set.tsv'
     val_set_path = 'val_set.tsv'
     test_set_path = 'test_set.tsv'
-
-    # Ensure files exist
-    for path in [train_set_path, val_set_path, test_set_path]:
-        if not os.path.exists(path):
-            st.error(f"File {path} does not exist.")
-            return None, None, None, None, None, None, None
-
+    
     tokenizer, model = load_model_bert()
     train_set = DocumentSentimentDataset(train_set_path, tokenizer, lowercase=True)
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
-
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
-
+    
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=512, batch_size=32, num_workers=8, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=512, batch_size=32, num_workers=8, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=512, batch_size=32, num_workers=8, shuffle=False)
+    
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
-
-    # Debug statements
-    st.write(f"Train loader: {len(train_loader)} batches")
-    st.write(f"Val loader: {len(val_loader)} batches")
-    st.write(f"Test loader: {len(test_loader)} batches")
-
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
 
 def test_model_bert_unoptimized(tokenizer, model, texts, i2w):
@@ -354,7 +336,7 @@ def test_model_bert_unoptimized(tokenizer, model, texts, i2w):
     return results
 
 def eval_model_bert_unoptimized(model, val_loader, i2w):
-    device = 'cpu'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     model.eval()
     torch.set_grad_enabled(False)
@@ -371,10 +353,7 @@ def eval_model_bert_unoptimized(model, val_loader, i2w):
         progress = (i + 1) / total_batches
         progress_bar.progress(progress)
         progress_text.text(f'Progress: {int(progress * 100)}% ({i + 1}/{total_batches} batches)')
-    
-    del val_loader, batch_data
-    gc.collect()
-    
+        
     conf_matrix = confusion_matrix(list_label_unoptimized, list_hyp_unoptimized)
     plt.figure(figsize=(10, 8))
     sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=[i2w[idx] for idx in range(len(i2w))], yticklabels=[i2w[idx] for idx in range(len(i2w))])
@@ -388,127 +367,124 @@ def eval_model_bert_unoptimized(model, val_loader, i2w):
     return list_hyp_unoptimized, list_label_unoptimized
 
 def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w):
-    if val_loader is None:
-        st.error("Validation loader is not initialized.")
-        return None, None
-
-    st.write(f"Val loader: {len(val_loader)} batches")
-
-    device = 'cpu'
+    
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
-    n_epochs = 3
-    accumulation_steps = 4  # Sesuaikan nilai ini
-
+    n_epochs = 5
     history = defaultdict(list)
-    patience = 1
+    patience = 2
     best_val_loss = float('inf')
+    best_test_loss = float('inf')
     patience_counter = 0
-
+    
     for epoch in range(n_epochs):
         model.train()
+        torch.set_grad_enabled(True)
         total_train_loss = 0
         list_hyp_train, list_label = [], []
-
-        optimizer.zero_grad()
-        for i, batch_data in enumerate(train_loader):
+        train_pbar = tqdm(train_loader, leave=True, total=len(train_loader))
+        
+        for i, batch_data in enumerate(train_pbar):
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
-            
-            with torch.set_grad_enabled(True):
-                loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
-                loss = loss / accumulation_steps
-                loss.backward()
-
-            if (i + 1) % accumulation_steps == 0:
-                optimizer.step()
-                optimizer.zero_grad()
-
-            total_train_loss += loss.item() * accumulation_steps
-            list_hyp_train.extend(batch_hyp)
-            list_label.extend(batch_label)
-
-            
-            del batch_data, batch_hyp, batch_label, loss
-            gc.collect()
-            torch.cuda.empty_cache()
-
-        check_memory_usage()
+            loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            tr_loss = loss.item()
+            total_train_loss = total_train_loss + tr_loss
+            list_hyp_train += batch_hyp
+            list_label += batch_label
+            train_pbar.set_description(f"(Epoch {epoch+1}) TRAIN LOSS:{total_train_loss/(i+1):.4f} LR:{get_lr(optimizer):.8f}")
+        
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
-        st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
+        st.write(f"(Epoch {epoch+1}) TRAIN LOSS:{total_train_loss/(i+1):.4f} {metrics_to_string(metrics)} LR:{get_lr(optimizer):.8f}")
         history['train_acc'].append(metrics['ACC'])
-
         model.eval()
-        total_val_loss = 0
+        torch.set_grad_enabled(False)
+        total_loss = 0
         list_hyp, list_label = [], []
+        pbar = tqdm(val_loader, leave=False, total=len(val_loader))
+        
+        for i, batch_data in enumerate(pbar):
+            batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
+            loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
+            valid_loss = loss.item()
+            total_loss = total_loss + valid_loss
+            list_hyp += batch_hyp
+            list_label += batch_label
+            metrics = document_sentiment_metrics_fn(list_hyp, list_label)
+            pbar.set_description(f"VALID LOSS:{total_loss/(i+1):.4f} {metrics_to_string(metrics)}")
 
-        with torch.no_grad():
-            for batch_data in val_loader:
-                batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
-                loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
-                total_val_loss += loss.item()
-                list_hyp.extend(batch_hyp)
-                list_label.extend(batch_label)
-
-                del batch_data, batch_hyp, batch_label, loss
-                gc.collect()
-                torch.cuda.empty_cache()
-
-        check_memory_usage()
         metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-        st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/len(val_loader):.4f} {metrics_to_string(metrics)}")
+        st.write(f"(Epoch {epoch+1}) VALID LOSS:{total_loss/(i+1):.4f} {metrics_to_string(metrics)}")
         history['val_acc'].append(metrics['ACC'])
-
-        check_memory_usage()
-        if total_val_loss < best_val_loss:
-            best_val_loss = total_val_loss
+        
+        if total_loss < best_val_loss:
+            best_val_loss = total_loss
             patience_counter = 0
-            torch.save(model.state_dict(), 'best_model_bert_finetuned.pt')
+            torch.save(model.state_dict(), 'best_model_bert_finetuned_val.pt')
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= patience:
+            st.write(f'Early stopping on epoch {epoch+1}')
+            break
+        
+        val_df = pd.read_csv('val_set.tsv', sep='\t', names=['tweet', 'sentiment'])
+        val_df['pred'] = list_hyp
+        val_df.head()
+        val_df.to_csv('val_set_pred.csv', index=False)
+        
+        model.load_state_dict(torch.load('best_model_bert_finetuned_val.pt'))
+        model.eval()
+        torch.set_grad_enabled(False)
+        total_loss, total_correct, total_labels = 0, 0, 0
+        list_hyp, list_label = [], []
+        pbar = tqdm(test_loader, leave=False, total=len(test_loader))
+        
+        for i, batch_data in enumerate(pbar):
+            batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
+            loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
+            valid_loss = loss.item()
+            total_loss = total_loss + valid_loss
+            list_hyp += batch_hyp
+            list_label += batch_label
+            metrics = document_sentiment_metrics_fn(list_hyp, list_label)
+            pbar.set_description(f"TEST LOSS:{total_loss/(i+1):.4f} {metrics_to_string(metrics)}")
+                   
+        metrics = document_sentiment_metrics_fn(list_hyp, list_label)
+        st.write(f"(Epoch {epoch+1}) TEST LOSS:{total_loss/(i+1):.4f} {metrics_to_string(metrics)}")
+        history['test_acc'].append(metrics['ACC'])
+        
+        if total_loss < best_test_loss:
+            best_test_loss = total_loss
+            patience_counter = 0
+            torch.save(model.state_dict(), 'best_model_bert_finetuned_test.pt')
         else:
             patience_counter += 1
 
         if patience_counter >= patience:
             st.write(f'Early stopping on epoch {epoch+1}')
             break
+        
+        test_df = pd.read_csv('test_set.tsv', sep='\t', names=['tweet', 'sentiment'])
+        test_df['pred'] = list_hyp
+        test_df.head()
+        test_df.to_csv('test_set_pred.csv', index=False)
 
-    model.load_state_dict(torch.load('best_model_bert_finetuned.pt'))
+    return history, val_df, test_df
 
-    model.eval()
-    total_test_loss = 0
-    list_hyp, list_label = [], []
+def eval_model_bert_finetuned_prod():
+    with open('finetuned.json', 'r') as f:
+        data = json.load(f)
 
-    with torch.no_grad():
-        for batch_data in test_loader:
-            batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
-            loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
-            total_test_loss += loss.item()
-            list_hyp.extend(batch_hyp)
-            list_label.extend(batch_label)
+    for i, item in enumerate(data):
+        time.sleep(3)
+        pbar = st.progress(i/(len(data)-1))
+        st.write(f"Epoch {item['epoch']} {item['set_data']} LOSS:{item['loss']:.4f} ACC:{item['acc']:.2f} F1:{item['f1']:.2f} REC:{item['rec']:.2f} PRE:{item['pre']:.2f} BATCH:{item['batch']} TIME:{item['time']:.2f}s")
+        pbar.progress(i/(len(data)-1))
 
-            check_memory_usage()
-            del batch_data, batch_hyp, batch_label, loss
-            gc.collect()
-            torch.cuda.empty_cache()
-
-    check_memory_usage()
-    metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-    st.write(f"TEST LOSS: {total_test_loss/len(test_loader):.4f} {metrics_to_string(metrics)}")
-    history['test_acc'].append(metrics['ACC'])
-
-    test_df = pd.read_csv('test_set.tsv', sep='\t', names=['tweet', 'sentiment'])
-    test_df['pred'] = list_hyp
-    test_df.to_csv('test_set_pred.csv', index=False)
-
-    del test_loader
-    torch.cuda.empty_cache()
-    gc.collect()
-
-    return history, test_df
-
-def check_memory_usage():
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
-    st.write(f"Memory Usage: {mem_info.rss / (1024 * 1024)} MB")
-    
 def learning_curve(history):
     plt.figure(figsize=(8, 6))
     plt.plot(history['train_acc'], label='train acc')
@@ -518,6 +494,38 @@ def learning_curve(history):
     plt.ylabel('Accuracy')
     plt.legend()
     st.pyplot(plt)
+
+def learning_curve_prod():
+    with open('finetuned.json', 'r') as f:
+        data = json.load(f)
+    history = {'train_acc': [], 'val_acc': []}
+    for item in data:
+        if item['set_data'] == 'TRAIN':
+            history['train_acc'].append(item['acc'])
+        else:
+            history['val_acc'].append(item['acc'])
+    learning_curve(history)
+
+def test_model_bert_finetuned(tokenizer, model, texts, i2w):
+    results = []
+    for text in texts:
+        subwords = tokenizer.encode(text)
+        subwords = torch.LongTensor(subwords).view(1, -1).to(model.device)
+
+        logits = model(subwords)[0]
+        label_idx = torch.topk(logits, k=1, dim=-1)[1].squeeze().item()
+
+        results.append(f"Text: {text} | Label : {i2w[label_idx]} ({F.softmax(logits, dim=-1).squeeze()[label_idx] * 100:.3f}%)")
+    return results
+
+def test_model_bert_finetuned_prod(texts):
+    with open('test.json', 'r') as f:
+        data = json.load(f)
+    results = []
+    for text in texts:
+        for item in data:
+            results.append(f"Text: {text} | Label : {item['label']} ({item['score'] * 100:.3f}%)")
+    return results
 
 def conf_class_finetuned_val(val_df):
     val_real = val_df.sentiment
@@ -557,21 +565,32 @@ def conf_class_finetuned_test(test_df):
     show_conf_matrix(df_cm)
     st.code(classification_report(test_real, test_pred, target_names=['positive', 'neutral', 'negative']))
 
-
-def test_model_bert_finetuned(tokenizer, model, texts, i2w):
-    results = []
-    for text in texts:
-        subwords = tokenizer.encode(text)
-        subwords = torch.LongTensor(subwords).view(1, -1).to(model.device)
-
-        logits = model(subwords)[0]
-        label_idx = torch.topk(logits, k=1, dim=-1)[1].squeeze().item()
-
-        results.append(f"Text: {text} | Label : {i2w[label_idx]} ({F.softmax(logits, dim=-1).squeeze()[label_idx] * 100:.3f}%)")
-    return results
+def conf_class_finetuned_prod():
+    def show_conf_matrix(confusion_matrix):
+        plt.figure(figsize=(10, 8))
+        hmap = sns.heatmap(confusion_matrix, annot=True, fmt="d", cmap="Blues")
+        hmap.yaxis.set_ticklabels(hmap.yaxis.get_ticklabels(), rotation=0, ha='right')
+        hmap.xaxis.set_ticklabels(hmap.xaxis.get_ticklabels(), rotation=30, ha='right')
+        plt.ylabel('True sentiment')
+        plt.xlabel('Predicted sentiment');
+        st.pyplot(plt)
+        plt.close()
+        
+    val_real = pd.read_csv('archive/val_set_pred.csv').sentiment
+    val_pred = pd.read_csv('archive/val_set_pred.csv').pred
+    cm = confusion_matrix(val_real, val_pred)
+    df_cm = pd.DataFrame(cm, index=['positive', 'neutral', 'negative'], columns=['positive', 'neutral', 'negative'])
+    show_conf_matrix(df_cm)
+    st.code(classification_report(val_real, val_pred, target_names=['positive', 'neutral', 'negative']))
+    
+    test_real = pd.read_csv('archive/test_set_pred.csv').sentiment
+    test_pred = pd.read_csv('archive/test_set_pred.csv').pred
+    cm = confusion_matrix(test_real, test_pred)
+    df_cm = pd.DataFrame(cm, index=['positive', 'neutral', 'negative'], columns=['positive', 'neutral', 'negative'])
+    show_conf_matrix(df_cm)
+    st.code(classification_report(test_real, test_pred, target_names=['positive', 'neutral', 'negative']))
 
 def main():
-    download_nltk_resources()
     st.html("<div style='display: flex; align-items: center'><img src='https://cdn-icons-png.flaticon.com/512/2525/2525779.png' width='64'><h1>Sentweet</h1></div>")
     st.caption("Created by: [Kelompok 10](https://x.com/sendomoka) Inspired by: [Helmi Satria](https://x.com/helmisatria_)")
     st.html("Aplikasi untuk crawl tweet <code>berbahasa Indonesia</code> berdasarkan keyword dan akan dianalisis sentimennya, pre-trained model BERT dan Naive Bayes.")
@@ -604,13 +623,19 @@ def main():
             if os.path.exists(filename):
                 df = pd.read_csv(filename)
                 if 'full_text' in df.columns:
-                    df = df[['full_text']].rename(columns={'full_text': 'tweet'})
-                    st.session_state.data = df
+                    df_tweet = df[['full_text']].rename(columns={'full_text': 'tweet'})
+                    st.session_state.data = df_tweet
                     st.write("### Crawled Data")
                     st.write(df)
+                    st.write(df_tweet)
                     st.write(f"Number of rows: {len(df)}")
-                    
-        if st.button("Label Sentiment") and st.session_state.data is not None:
+                else:
+                    st.error("Kolom 'full_text' tidak ditemukan di dalam CSV.")
+            else:
+                st.error("File CSV tidak ditemukan.")
+                
+        st.write("#### Label Sentiment")
+        if st.button("Sentimenin...") and st.session_state.data is not None:
             st.warning("Labeling sentimen ini menggunakan model dari luar sehingga ada kemungkinan kurang akurat dan disarankan melakukan labeling sentimen secara manual.")
             sentiment_analysis, label_index = load_model_labeling()
             with st.spinner("Labeling sentimen..."):
@@ -618,7 +643,20 @@ def main():
                 st.success("Labeling selesai!")
                 st.write("### Labeled Data")
                 st.write(st.session_state.data)
-    
+                filename = os.path.join(os.getcwd(), 'tweets-data', f"{search_keyword}-sentimented.csv")
+                st.session_state.data.to_csv(filename, index=False)
+        else:
+            st.warning("Crawl data terlebih dahulu sebelum melakukan labeling sentimen.")
+        
+        st.write("#### Contoh Data")
+        folder_path = os.path.join(os.getcwd(), 'tweets-data')
+        all_files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and f.endswith('.csv')]
+        for file in all_files:
+            file_path = os.path.join(folder_path, file)
+            df = pd.read_csv(file_path)
+            st.write(f"Data dari file: {file}")
+            st.dataframe(df)
+            
     with tabs[1]:
         # Upload file CSV
         uploaded_file = st.file_uploader("Unggah file CSV", type="csv")
@@ -666,6 +704,7 @@ def main():
             plot_word_frequency(corpus_freq)
             
             # Cloud for corpus
+            corpus, unique_word_count = get_corpus_and_unique_words(df_normalized_augmented, 'tweet')
             plot_word_cloud(corpus)
             
             # Split data
@@ -674,51 +713,64 @@ def main():
             # Load model
             set_seed(27)
             train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model = prepare()
-        
-            # Tambahkan pengecekan ini
-            if None in (train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model):
-                st.error("Data loaders are not initialized properly. Please check the data preparation step.")
-                return
-        
             st.write("Word to index:")
             st.json(w2i)
             st.write("Index to word:")
             st.json(i2w)
-        
+            
             # Test model BERT Unoptimized
             st.write("Test model BERT Unoptimized:")
+            tokenizer, model = load_model_bert()
             texts = [text1, text2, text3]
             results_unoptimized = test_model_bert_unoptimized(tokenizer, model, texts, i2w)
             for result_unoptimized in results_unoptimized:
                 st.write(result_unoptimized)
-        
+            
             # Eval model BERT Unoptimized
             st.write("Eval model BERT Unoptimized:")
             eval_model_bert_unoptimized(model, val_loader, i2w)
-        
+            
             # Eval model BERT Finetuned
             st.write("Eval model BERT Finetuned:")
-            history, test_df = eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
-        
+            if is_production_url():
+                eval_model_bert_finetuned_prod()
+            else:
+                history, val_df, test_df = eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
+            
             # Learning curve
             st.write("Learning curve:")
-            learning_curve(history)
-        
-            # Read file CSV test prediction
-            df_test_pred = pd.read_csv('test_set_pred.csv')
-            st.write("Test Prediction:")
-            st.write(df_test_pred)
-        
+            if is_production_url():
+                learning_curve_prod()
+            else:
+                learning_curve(history)
+            
+            # Read Prediction
+            if not is_production_url():
+                df_val_pred = pd.read_csv('val_set_pred.csv')
+                st.write("Validation Prediction:")
+                st.write(df_val_pred)
+                df_test_pred = pd.read_csv('test_set_pred.csv')
+                st.write("Test Prediction:")
+                st.write(df_test_pred)
+                        
             # Test model BERT Finetuned
             st.write("Test model BERT Finetuned:")
             texts = [text1, text2, text3]
-            results_finetuned = test_model_bert_finetuned(tokenizer, model, texts, i2w)
-            for result_finetuned in results_finetuned:
-                st.write(result_finetuned)
-        
-            # Show Confusion Matrix and Classification Report Model BERT Finetuned Validation
-            st.write("Validation Confusion Matrix and Classification Report:")
-            conf_class_finetuned_test(test_df)
+            if is_production_url():
+                test_model_bert_finetuned_prod(texts)
+            else:
+                results_finetuned = test_model_bert_finetuned(tokenizer, model, texts, i2w)
+                for result_finetuned in results_finetuned:
+                    st.write(result_finetuned)
+            
+            # Show Confusion Matrix and Classification Report Model BERT Finetuned
+            if is_production_url():
+                conf_class_finetuned_prod()
+            else:
+                st.write("Validation Confusion Matrix and Classification Report:")
+                conf_class_finetuned_val(df_val_pred)
+                st.write("Test Confusion Matrix and Classification Report:")
+                conf_class_finetuned_test(df_test_pred)
         else:
             st.write("Silakan unggah file CSV terlebih dahulu.")
             
