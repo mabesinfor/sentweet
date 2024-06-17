@@ -658,58 +658,48 @@ def main():
               
             # Load model
             set_seed(27)
-            result = prepare()
-            if result is None:
-                st.error("Failed to prepare data loaders.")
+            train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model = prepare()
+        
+            if not train_loader or not val_loader or not test_loader:
+                st.error("Data loaders are not initialized properly. Please check the data preparation step.")
                 return
-            train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model = result
         
             st.write("Word to index:")
             st.json(w2i)
             st.write("Index to word:")
             st.json(i2w)
         
-            # Further code including evaluations...
-            if val_loader is None:
-                st.error("Validation loader is not initialized.")
-                return
-        
-            if test_loader is None:
-                st.error("Test loader is not initialized.")
-                return
-            
             # Test model BERT Unoptimized
             st.write("Test model BERT Unoptimized:")
-            tokenizer, model = load_model_bert()
             texts = [text1, text2, text3]
             results_unoptimized = test_model_bert_unoptimized(tokenizer, model, texts, i2w)
             for result_unoptimized in results_unoptimized:
                 st.write(result_unoptimized)
-            
+        
             # Eval model BERT Unoptimized
             st.write("Eval model BERT Unoptimized:")
             eval_model_bert_unoptimized(model, val_loader, i2w)
-            
+        
             # Eval model BERT Finetuned
             st.write("Eval model BERT Finetuned:")
             history, test_df = eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
-            
+        
             # Learning curve
             st.write("Learning curve:")
             learning_curve(history)
-            
+        
             # Read file CSV test prediction
             df_test_pred = pd.read_csv('test_set_pred.csv')
             st.write("Test Prediction:")
             st.write(df_test_pred)
-            
+        
             # Test model BERT Finetuned
             st.write("Test model BERT Finetuned:")
             texts = [text1, text2, text3]
             results_finetuned = test_model_bert_finetuned(tokenizer, model, texts, i2w)
             for result_finetuned in results_finetuned:
                 st.write(result_finetuned)
-            
+        
             # Show Confusion Matrix and Classification Report Model BERT Finetuned Validation
             st.write("Validation Confusion Matrix and Classification Report:")
             conf_class_finetuned_test(test_df)
