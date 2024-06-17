@@ -439,7 +439,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
         model.eval()
         total_val_loss = 0
-        list_hyp, list_label = []
+        list_hyp, list_label = [], []
 
         with torch.no_grad():
             for batch_data in val_loader:
@@ -474,7 +474,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
     model.eval()
     total_test_loss = 0
-    list_hyp, list_label = []
+    list_hyp, list_label = [], []
 
     with torch.no_grad():
         for batch_data in test_loader:
