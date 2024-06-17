@@ -483,11 +483,12 @@ def eval_model_bert_finetuned_prod():
     with open('finetuned.json', 'r') as f:
         data = json.load(f)
 
+    pbar = st.progress(0)
     for i, item in enumerate(data):
         time.sleep(3)
-        pbar = st.progress(i/(len(data)-1))
+        percentage = i / (len(data) - 1)
+        pbar.progress(percentage)
         st.write(f"Epoch {item['epoch']} {item['set_data']} LOSS:{item['loss']:.4f} ACC:{item['acc']:.2f} F1:{item['f1']:.2f} REC:{item['rec']:.2f} PRE:{item['pre']:.2f} BATCH:{item['batch']} TIME:{item['time']:.2f}s")
-        pbar.progress(i/(len(data)-1))
 
 def learning_curve(history):
     plt.figure(figsize=(8, 6))
