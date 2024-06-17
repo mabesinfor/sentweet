@@ -4,8 +4,7 @@ import numpy as np
 import re
 import os
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix, classification_report
 from collections import defaultdict
 import datetime
 import time
@@ -26,7 +25,7 @@ import seaborn as sns
 import matplotlib as mpl
 from wordcloud import WordCloud
 
-#Model IndoBERT
+# Model IndoBERT
 import random
 import torch
 import torch.nn.functional as F
@@ -137,7 +136,7 @@ def data_cleaning(df):
         # hapus emoticon
         text = re.sub(r"([xX;:]'?[dDpPvVoO3)(])", ' ', text)
         # hapus link
-        text = re.sub(r"(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})", "", text)
+        text = re.sub(r"(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[aA-Z0-9]+\.[^\s]{2,})", "", text)
         # hapus usename
         text = re.sub(r"@[^\s]+[\s]?", ' ', text)
         # hapus hashtag
@@ -322,9 +321,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
     
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=4, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
     
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
@@ -342,7 +341,6 @@ def test_model_bert_unoptimized(tokenizer, model, texts, i2w):
     return results
 
 def eval_model_bert_unoptimized(model, val_loader, i2w):
-    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = 'cpu'
     model.to(device)
     model.eval()
@@ -377,12 +375,11 @@ def eval_model_bert_unoptimized(model, val_loader, i2w):
     return list_hyp_unoptimized, list_label_unoptimized
 
 def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w):
-    device = 'cpu'  # Menggunakan CPU
+    device = 'cpu'
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
     n_epochs = 3
 
-    # Mengatur ukuran batch yang sangat kecil untuk mengurangi penggunaan memori
     train_batch_size = 1
     val_batch_size = 1
     test_batch_size = 1
@@ -397,11 +394,10 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         total_train_loss = 0
         list_hyp_train, list_label = [], []
 
-        # Iterasi melalui dataset dengan ukuran batch yang dihitung secara manual
         train_iter = iter(train_loader)
-        for _ in range(train_batch_size):
+        for _ in range(len(train_loader)):
             batch_data = next(train_iter)
-            batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
+            batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t untuk t dalam batch_data[:-1])
             optimizer.zero_grad()
             with torch.set_grad_enabled(True):
                 loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
@@ -411,21 +407,14 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             total_train_loss += loss.item()
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
-            st.text(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/(len(list_hyp_train)//batch_data[0].size(0)):.4f} LR: {get_lr(optimizer):.8f}")
 
-            # Hapus tensor yang tidak diperlukan untuk membebaskan memori
+            # Hapus variabel besar dan panggil garbage collector
             del batch_data, batch_hyp, batch_label, loss
             gc.collect()
             torch.cuda.empty_cache()
 
-            # Memantau penggunaan memori
-            mem_usage = psutil.virtual_memory().used / (1024.0 ** 3)  # Dalam GB
-            if mem_usage > 3.0:  # Atur batas penggunaan memori sesuai kebutuhan
-                st.error(f"Penggunaan memori melebihi batas ({mem_usage:.2f} GB). Proses evaluasi dihentikan.")
-                return
-
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
-        st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/train_batch_size:.4f} {metrics_to_string(metrics)}")
+        st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
         history['train_acc'].append(metrics['ACC'])
 
         model.eval()
@@ -433,30 +422,22 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         list_hyp, list_label = [], []
 
         with torch.no_grad():
-            # Iterasi melalui dataset dengan ukuran batch yang dihitung secara manual
             val_iter = iter(val_loader)
-            for _ in range(val_batch_size):
+            for _ in range(len(val_loader)):
                 batch_data = next(val_iter)
-                batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
+                batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t untuk t dalam batch_data[:-1])
                 loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
                 total_val_loss += loss.item()
                 list_hyp.extend(batch_hyp)
                 list_label.extend(batch_label)
-                st.text(f"VALID LOSS: {total_val_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
 
-                # Hapus tensor yang tidak diperlukan untuk membebaskan memori
+                # Hapus variabel besar dan panggil garbage collector
                 del batch_data, batch_hyp, batch_label, loss
                 gc.collect()
                 torch.cuda.empty_cache()
 
-                # Memantau penggunaan memori
-                mem_usage = psutil.virtual_memory().used / (1024.0 ** 3)  # Dalam GB
-                if mem_usage > 3.0:  # Atur batas penggunaan memori sesuai kebutuhan
-                    st.error(f"Penggunaan memori melebihi batas ({mem_usage:.2f} GB). Proses evaluasi dihentikan.")
-                    return
-
         metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-        st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/val_batch_size:.4f} {metrics_to_string(metrics)}")
+        st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/len(val_loader):.4f} {metrics_to_string(metrics)}")
         history['val_acc'].append(metrics['ACC'])
 
         if total_val_loss < best_val_loss:
@@ -471,10 +452,9 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             break
 
         # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
-        del train_iter
-        del val_iter
-        torch.cuda.empty_cache()
+        del train_iter, val_iter
         gc.collect()
+        torch.cuda.empty_cache()
 
     model.load_state_dict(torch.load('best_model_bert_finetuned.pt'))
 
@@ -483,30 +463,22 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     list_hyp, list_label = [], []
 
     with torch.no_grad():
-        # Iterasi melalui dataset dengan ukuran batch yang dihitung secara manual
         test_iter = iter(test_loader)
-        for _ in range(test_batch_size):
+        for _ in range(len(test_loader)):
             batch_data = next(test_iter)
-            batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
+            batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t untuk t dalam batch_data[:-1])
             loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
             total_test_loss += loss.item()
             list_hyp.extend(batch_hyp)
             list_label.extend(batch_label)
-            st.text(f"TEST LOSS: {total_test_loss/(len(list_hyp)//batch_data[0].size(0)):.4f}")
 
-            # Hapus tensor yang tidak diperlukan untuk membebaskan memori
+            # Hapus variabel besar dan panggil garbage collector
             del batch_data, batch_hyp, batch_label, loss
             gc.collect()
             torch.cuda.empty_cache()
 
-            # Memantau penggunaan memori
-            mem_usage = psutil.virtual_memory().used / (1024.0 ** 3)  # Dalam GB
-            if mem_usage > 3.0:  # Atur batas penggunaan memori sesuai kebutuhan
-                st.error(f"Penggunaan memori melebihi batas ({mem_usage:.2f} GB). Proses evaluasi dihentikan.")
-                return
-
     metrics = document_sentiment_metrics_fn(list_hyp, list_label)
-    st.write(f"TEST LOSS: {total_test_loss/test_batch_size:.4f} {metrics_to_string(metrics)}")
+    st.write(f"TEST LOSS: {total_test_loss/len(test_loader):.4f} {metrics_to_string(metrics)}")
     history['test_acc'].append(metrics['ACC'])
 
     test_df = pd.read_csv('test_set.tsv', sep='\t', names=['tweet', 'sentiment'])
@@ -705,16 +677,11 @@ def main():
             
             # Eval model BERT Finetuned
             st.write("Eval model BERT Finetuned:")
-            history, val_df, test_df = eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
+            history, test_df = eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             
             # Learning curve
             st.write("Learning curve:")
             learning_curve(history)
-            
-            # Read file CSV validation prediction
-            df_val_pred = pd.read_csv('val_set_pred.csv')
-            st.write("Validation Prediction:")
-            st.write(df_val_pred)
             
             # Read file CSV test prediction
             df_test_pred = pd.read_csv('test_set_pred.csv')
@@ -730,11 +697,7 @@ def main():
             
             # Show Confusion Matrix and Classification Report Model BERT Finetuned Validation
             st.write("Validation Confusion Matrix and Classification Report:")
-            conf_class_finetuned_val(df_val_pred)
-            
-            # Show Confusion Matrix and Classification Report Model BERT Finetuned Test
-            st.write("Test Confusion Matrix and Classification Report:")
-            conf_class_finetuned_test(df_test_pred)
+            conf_class_finetuned_test(test_df)
         else:
             st.write("Silakan unggah file CSV terlebih dahulu.")
             
