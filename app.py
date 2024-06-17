@@ -33,7 +33,7 @@ import torch.nn.functional as F
 from torch import optim
 from tqdm import tqdm
 
-from transformers import BertForSequenceClassification, BertConfig, BertTokenizer, pipeline, AutoModelForSequenceClassification, AutoTokenizer
+from transformers import BertForSequenceClassification, BertConfig, BertTokenizer, pipeline, AutoModelForSequenceClassification, AutoTokenizer, DistilBertForSequenceClassification, DistilBertTokenizer
 from indonlu.utils.data_utils import DocumentSentimentDataset, DocumentSentimentDataLoader
 from indonlu.utils.forward_fn import forward_sequence_classification
 from indonlu.utils.metrics import document_sentiment_metrics_fn
@@ -300,12 +300,16 @@ def metrics_to_string(metric_dict):
 
 @st.cache_resource
 def load_model_bert():
-    tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
-    config = BertConfig.from_pretrained('indobenchmark/indobert-base-p1')
+    #tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
+    #config = BertConfig.from_pretrained('indobenchmark/indobert-base-p1')
+    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+    config = BertConfig.from_pretrained('distilbert-base-uncased')
     config.num_labels = DocumentSentimentDataset.NUM_LABELS
 
-    model = BertForSequenceClassification.from_pretrained(
-        'indobenchmark/indobert-base-p1',
+    #model = BertForSequenceClassification.from_pretrained(
+        #'indobenchmark/indobert-base-p1',
+    model = DistilBertForSequenceClassification.from_pretrained(
+        'distilbert-base-uncased',
         config=config,
         ignore_mismatched_sizes=True
     )
@@ -382,10 +386,10 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
     n_epochs = 3
 
-    # Hitung ukuran batch secara manual
-    train_batch_size = int(len(train_loader.dataset) * 0.05)  # Menggunakan 5% dari ukuran dataset sebagai batch size
-    val_batch_size = int(len(val_loader.dataset) * 0.05)
-    test_batch_size = int(len(test_loader.dataset) * 0.05)
+    # Mengatur ukuran batch yang sangat kecil untuk mengurangi penggunaan memori
+    train_batch_size = 1
+    val_batch_size = 1
+    test_batch_size = 1
 
     history = defaultdict(list)
     patience = 2
@@ -415,6 +419,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
             # Hapus tensor yang tidak diperlukan untuk membebaskan memori
             del batch_data, batch_hyp, batch_label, loss
+            gc.collect()
             torch.cuda.empty_cache()
 
             # Memantau penggunaan memori
@@ -445,6 +450,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
                 # Hapus tensor yang tidak diperlukan untuk membebaskan memori
                 del batch_data, batch_hyp, batch_label, loss
+                gc.collect()
                 torch.cuda.empty_cache()
 
                 # Memantau penggunaan memori
@@ -494,6 +500,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
             # Hapus tensor yang tidak diperlukan untuk membebaskan memori
             del batch_data, batch_hyp, batch_label, loss
+            gc.collect()
             torch.cuda.empty_cache()
 
             # Memantau penggunaan memori
