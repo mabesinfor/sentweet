@@ -380,10 +380,6 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
     n_epochs = 3
 
-    train_batch_size = 1
-    val_batch_size = 1
-    test_batch_size = 1
-
     history = defaultdict(list)
     patience = 2
     best_val_loss = float('inf')
@@ -394,9 +390,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         total_train_loss = 0
         list_hyp_train, list_label = [], []
 
-        train_iter = iter(train_loader)
-        for _ in range(len(train_loader)):
-            batch_data = next(train_iter)
+        for batch_data in train_loader:
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
             optimizer.zero_grad()
             with torch.set_grad_enabled(True):
@@ -408,7 +402,6 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
 
-            # Hapus variabel besar dan panggil garbage collector
             del batch_data, batch_hyp, batch_label, loss
             gc.collect()
             torch.cuda.empty_cache()
@@ -422,16 +415,13 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
         list_hyp, list_label = [], []
 
         with torch.no_grad():
-            val_iter = iter(val_loader)
-            for _ in range(len(val_loader)):
-                batch_data = next(val_iter)
+            for batch_data in val_loader:
                 batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
                 loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
                 total_val_loss += loss.item()
                 list_hyp.extend(batch_hyp)
                 list_label.extend(batch_label)
 
-                # Hapus variabel besar dan panggil garbage collector
                 del batch_data, batch_hyp, batch_label, loss
                 gc.collect()
                 torch.cuda.empty_cache()
@@ -451,8 +441,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             st.write(f'Early stopping on epoch {epoch+1}')
             break
 
-        # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
-        del train_iter, val_iter
+        del val_loader
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -463,16 +452,13 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     list_hyp, list_label = [], []
 
     with torch.no_grad():
-        test_iter = iter(test_loader)
-        for _ in range(len(test_loader)):
-            batch_data = next(test_iter)
+        for batch_data in test_loader:
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
             loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
             total_test_loss += loss.item()
             list_hyp.extend(batch_hyp)
             list_label.extend(batch_label)
 
-            # Hapus variabel besar dan panggil garbage collector
             del batch_data, batch_hyp, batch_label, loss
             gc.collect()
             torch.cuda.empty_cache()
@@ -485,8 +471,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     test_df['pred'] = list_hyp
     test_df.to_csv('test_set_pred.csv', index=False)
 
-    # Hapus data loader setelah digunakan untuk mengurangi penggunaan memori
-    del test_iter
+    del test_loader
     torch.cuda.empty_cache()
     gc.collect()
 
