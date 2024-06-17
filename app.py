@@ -595,6 +595,11 @@ def main():
     st.caption("Created by: [Kelompok 10](https://x.com/sendomoka) Inspired by: [Helmi Satria](https://x.com/helmisatria_)")
     st.html("Aplikasi untuk crawl tweet <code>berbahasa Indonesia</code> berdasarkan keyword dan akan dianalisis sentimennya, pre-trained model BERT dan Naive Bayes.")
     tabs = st.tabs(["Crawling + Sentiment Analysis", "Upload CSV + Sentiment Analysis"])
+    if is_production_url():
+        st.code("Running in production environment")
+    else:
+        st.code("Running in development environment")
+
     
     with tabs[0]:
         # Tab untuk crawling dan analisis sentimen
