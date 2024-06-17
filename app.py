@@ -236,10 +236,11 @@ def plot_word_frequency(corpus_freq):
 
 def plot_word_cloud(corpus):
     f, ax2 = plt.subplots(1, figsize=(15, 5))
-    ax2.set_title('Word Cloud in Train Data')
+    ax2.set_title('Word Cloud in Train Data')  # Corrected method name
     ax2.tick_params(axis='x', rotation=45)
     wordcloud = WordCloud(max_font_size=50, max_words=100, background_color="white").generate(corpus)
     ax2.imshow(wordcloud, interpolation="bilinear")
+    ax2.axis('off')  # Hide axes for better display of the word cloud
     st.pyplot(f)
 
 def split_and_save_data(df_normalized_augmented):
@@ -634,7 +635,6 @@ def main():
             plot_word_frequency(corpus_freq)
             
             # Cloud for corpus
-            corpus, unique_word_count = get_corpus_and_unique_words(df_normalized_augmented, 'tweet')
             plot_word_cloud(corpus)
             
             # Split data
