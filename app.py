@@ -388,32 +388,28 @@ def eval_model_bert_unoptimized(model, val_loader, i2w):
     return list_hyp_unoptimized, list_label_unoptimized
 
 def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w):
-    # Tambahkan debug statement ini
     if val_loader is None:
         st.error("Validation loader is not initialized.")
         return None, None
 
-    # Debug statement tambahan untuk memeriksa panjang val_loader
-    st.write(f"Val loader: {len(val_loader)} batches")  
+    st.write(f"Val loader: {len(val_loader)} batches")
 
     device = 'cpu'
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
-    n_epochs = 2
+    n_epochs = 3
+    accumulation_steps = 4  # Sesuaikan nilai ini
 
     history = defaultdict(list)
     patience = 1
     best_val_loss = float('inf')
     patience_counter = 0
 
-    accumulation_steps = 4  # Sesuaikan nilai ini dengan jumlah langkah akumulasi yang diinginkan
-
     for epoch in range(n_epochs):
         model.train()
         total_train_loss = 0
         list_hyp_train, list_label = [], []
-        check_memory_usage()
-    
+
         optimizer.zero_grad()
         for i, batch_data in enumerate(train_loader):
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
@@ -422,30 +418,31 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
                 loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
                 loss = loss / accumulation_steps
                 loss.backward()
-            
+
             if (i + 1) % accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
-    
-            total_train_loss += loss.item() * accumulation_steps  # kalikan kembali untuk mendapatkan nilai asli
+
+            total_train_loss += loss.item() * accumulation_steps
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
-    
+
+            
             del batch_data, batch_hyp, batch_label, loss
             gc.collect()
             torch.cuda.empty_cache()
-    
+
+        check_memory_usage()
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
         st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
         history['train_acc'].append(metrics['ACC'])
 
-
         model.eval()
         total_val_loss = 0
-        list_hyp, list_label = [], []
+        list_hyp, list_label = []
 
         with torch.no_grad():
-            for batch_data in val_loader:  # Pastikan val_loader bukan None
+            for batch_data in val_loader:
                 batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
                 loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
                 total_val_loss += loss.item()
@@ -456,10 +453,12 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
                 gc.collect()
                 torch.cuda.empty_cache()
 
+        check_memory_usage()
         metrics = document_sentiment_metrics_fn(list_hyp, list_label)
         st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/len(val_loader):.4f} {metrics_to_string(metrics)}")
         history['val_acc'].append(metrics['ACC'])
 
+        check_memory_usage()
         if total_val_loss < best_val_loss:
             best_val_loss = total_val_loss
             patience_counter = 0
@@ -475,7 +474,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
     model.eval()
     total_test_loss = 0
-    list_hyp, list_label = [], []
+    list_hyp, list_label = []
 
     with torch.no_grad():
         for batch_data in test_loader:
@@ -485,10 +484,12 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             list_hyp.extend(batch_hyp)
             list_label.extend(batch_label)
 
+            check_memory_usage()
             del batch_data, batch_hyp, batch_label, loss
             gc.collect()
             torch.cuda.empty_cache()
 
+    check_memory_usage()
     metrics = document_sentiment_metrics_fn(list_hyp, list_label)
     st.write(f"TEST LOSS: {total_test_loss/len(test_loader):.4f} {metrics_to_string(metrics)}")
     history['test_acc'].append(metrics['ACC'])
