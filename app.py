@@ -236,7 +236,7 @@ def plot_word_frequency(corpus_freq):
 
 def plot_word_cloud(corpus):
     f, ax2 = plt.subplots(1, figsize=(15, 5))
-    ax2.set_title('Word Cloud in Train Data')
+    ax2.setTitle('Word Cloud in Train Data')
     ax2.tick_params(axis='x', rotation=45)
     wordcloud = WordCloud(max_font_size=50, max_words=100, background_color="white").generate(corpus)
     ax2.imshow(wordcloud, interpolation="bilinear")
