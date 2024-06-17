@@ -316,17 +316,29 @@ def prepare():
     train_set_path = 'train_set.tsv'
     val_set_path = 'val_set.tsv'
     test_set_path = 'test_set.tsv'
-    
+
+    # Ensure files exist
+    for path in [train_set_path, val_set_path, test_set_path]:
+        if not os.path.exists(path):
+            st.error(f"File {path} does not exist.")
+            return None, None, None, None, None, None, None
+
     tokenizer, model = load_model_bert()
     train_set = DocumentSentimentDataset(train_set_path, tokenizer, lowercase=True)
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
-    
+
     train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=True)
     val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
     test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
-    
+
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
+
+    # Debug statements
+    st.write(f"Train loader: {len(train_loader)} batches")
+    st.write(f"Val loader: {len(val_loader)} batches")
+    st.write(f"Test loader: {len(test_loader)} batches")
+
     return train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model
 
 def test_model_bert_unoptimized(tokenizer, model, texts, i2w):
@@ -376,6 +388,10 @@ def eval_model_bert_unoptimized(model, val_loader, i2w):
     return list_hyp_unoptimized, list_label_unoptimized
 
 def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w):
+    if val_loader is None:
+        st.error("Validation loader is not initialized.")
+        return None, None
+
     device = 'cpu'
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
@@ -642,11 +658,25 @@ def main():
               
             # Load model
             set_seed(27)
-            train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model = prepare()
+            result = prepare()
+            if result is None:
+                st.error("Failed to prepare data loaders.")
+                return
+            train_loader, val_loader, test_loader, w2i, i2w, tokenizer, model = result
+        
             st.write("Word to index:")
             st.json(w2i)
             st.write("Index to word:")
             st.json(i2w)
+        
+            # Further code including evaluations...
+            if val_loader is None:
+                st.error("Validation loader is not initialized.")
+                return
+        
+            if test_loader is None:
+                st.error("Test loader is not initialized.")
+                return
             
             # Test model BERT Unoptimized
             st.write("Test model BERT Unoptimized:")
