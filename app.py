@@ -328,9 +328,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
 
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=4, num_workers=0, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=4, num_workers=0, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=4, num_workers=0, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=2, num_workers=0, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=2, num_workers=0, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=2, num_workers=0, shuffle=False)
 
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
 
@@ -406,30 +406,39 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     best_val_loss = float('inf')
     patience_counter = 0
 
+    accumulation_steps = 4  # Sesuaikan nilai ini dengan jumlah langkah akumulasi yang diinginkan
+
     for epoch in range(n_epochs):
         model.train()
         total_train_loss = 0
         list_hyp_train, list_label = [], []
-
-        for batch_data in train_loader:
+        check_memory_usage()
+    
+        optimizer.zero_grad()
+        for i, batch_data in enumerate(train_loader):
             batch_data = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch_data[:-1])
-            optimizer.zero_grad()
+            
             with torch.set_grad_enabled(True):
                 loss, batch_hyp, batch_label = forward_sequence_classification(model, batch_data, i2w=i2w, device=device)
+                loss = loss / accumulation_steps
                 loss.backward()
+            
+            if (i + 1) % accumulation_steps == 0:
                 optimizer.step()
-
-            total_train_loss += loss.item()
+                optimizer.zero_grad()
+    
+            total_train_loss += loss.item() * accumulation_steps  # kalikan kembali untuk mendapatkan nilai asli
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
-
+    
             del batch_data, batch_hyp, batch_label, loss
             gc.collect()
             torch.cuda.empty_cache()
-
+    
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
         st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/len(train_loader):.4f} {metrics_to_string(metrics)}")
         history['train_acc'].append(metrics['ACC'])
+
 
         model.eval()
         total_val_loss = 0
@@ -494,6 +503,11 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
     return history, test_df
 
+def check_memory_usage():
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    st.write(f"Memory Usage: {mem_info.rss / (1024 * 1024)} MB")
+    
 def learning_curve(history):
     plt.figure(figsize=(8, 6))
     plt.plot(history['train_acc'], label='train acc')
