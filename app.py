@@ -328,9 +328,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
 
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=2, num_workers=0, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=2, num_workers=0, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=2, num_workers=0, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
 
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
 
@@ -427,6 +427,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             list_hyp_train.extend(batch_hyp)
             list_label.extend(batch_label)
 
+            
             del batch_data, batch_hyp, batch_label, loss
             gc.collect()
             torch.cuda.empty_cache()
@@ -438,7 +439,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
         model.eval()
         total_val_loss = 0
-        list_hyp, list_label = [], []
+        list_hyp, list_label = []
 
         with torch.no_grad():
             for batch_data in val_loader:
@@ -473,7 +474,7 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
 
     model.eval()
     total_test_loss = 0
-    list_hyp, list_label = [], []
+    list_hyp, list_label = []
 
     with torch.no_grad():
         for batch_data in test_loader:
