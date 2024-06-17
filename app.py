@@ -328,9 +328,9 @@ def prepare():
     val_set = DocumentSentimentDataset(val_set_path, tokenizer, lowercase=True)
     test_set = DocumentSentimentDataset(test_set_path, tokenizer, lowercase=True)
 
-    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=True)
-    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
-    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=1, num_workers=0, shuffle=False)
+    train_loader = DocumentSentimentDataLoader(dataset=train_set, max_seq_len=64, batch_size=4, num_workers=0, shuffle=True)
+    val_loader = DocumentSentimentDataLoader(dataset=val_set, max_seq_len=64, batch_size=4, num_workers=0, shuffle=False)
+    test_loader = DocumentSentimentDataLoader(dataset=test_set, max_seq_len=64, batch_size=4, num_workers=0, shuffle=False)
 
     w2i, i2w = DocumentSentimentDataset.LABEL2INDEX, DocumentSentimentDataset.INDEX2LABEL
 
@@ -399,10 +399,10 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
     device = 'cpu'
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
-    n_epochs = 3
+    n_epochs = 2
 
     history = defaultdict(list)
-    patience = 2
+    patience = 1
     best_val_loss = float('inf')
     patience_counter = 0
 
