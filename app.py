@@ -40,7 +40,12 @@ from indonlu.utils.metrics import document_sentiment_metrics_fn
 
 st.set_page_config(page_title="Sentweet", layout="centered", page_icon="🐦")
 
-#def is_production_url():
+def env():
+    environment = st.secrets["general"].get("ENVIRONMENT", "localhost")
+    if environment == 'production':
+        return True
+    else:
+        return False
     
 def crawl_twitter_data(auth_token, search_keyword, limit, filename, start_date=None, end_date=None):
     if not os.path.exists('tweet-harvest'):
@@ -590,11 +595,11 @@ def conf_class_finetuned_prod():
     st.code(classification_report(test_real, test_pred, target_names=['positive', 'neutral', 'negative']))
 
 def main():
-    environment = st.secrets["general"].get("ENVIRONMENT", "localhost")
-    if environment == 'production':
-        st.write("Aplikasi berjalan di production (Streamlit Community Cloud).")
+    if env() is True:
+        st.toast("Running in production environment", icon="🚀")
     else:
-        st.write("Aplikasi berjalan di localhost.")
+        st.toast("Running in development environment", icon="🚀")
+        
     st.html("<div style='display: flex; align-items: center'><img src='https://cdn-icons-png.flaticon.com/512/2525/2525779.png' width='64'><h1>Sentweet</h1></div>")
     st.caption("Created by: [Kelompok 10](https://x.com/sendomoka) Inspired by: [Helmi Satria](https://x.com/helmisatria_)")
     st.html("Aplikasi untuk crawl tweet <code>berbahasa Indonesia</code> berdasarkan keyword dan akan dianalisis sentimennya, pre-trained model BERT dan Naive Bayes.")
@@ -736,20 +741,20 @@ def main():
             
             # Eval model BERT Finetuned
             st.write("Eval model BERT Finetuned:")
-            if is_production_url():
+            if env() is True:
                 eval_model_bert_finetuned_prod()
             else:
                 history, val_df, test_df = eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             
             # Learning curve
             st.write("Learning curve:")
-            if is_production_url():
+            if env() is True:
                 learning_curve_prod()
             else:
                 learning_curve(history)
             
             # Read Prediction
-            if not is_production_url():
+            if env() is False:
                 df_val_pred = pd.read_csv('val_set_pred.csv')
                 st.write("Validation Prediction:")
                 st.write(df_val_pred)
@@ -760,7 +765,7 @@ def main():
             # Test model BERT Finetuned
             st.write("Test model BERT Finetuned:")
             texts = [text1, text2, text3]
-            if is_production_url():
+            if env() is True:
                 test_model_bert_finetuned_prod(texts)
             else:
                 results_finetuned = test_model_bert_finetuned(tokenizer, model, texts, i2w)
@@ -768,7 +773,7 @@ def main():
                     st.write(result_finetuned)
             
             # Show Confusion Matrix and Classification Report Model BERT Finetuned
-            if is_production_url():
+            if env() is True:
                 conf_class_finetuned_prod()
             else:
                 st.write("Validation Confusion Matrix and Classification Report:")
