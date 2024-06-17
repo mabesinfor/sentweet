@@ -12,6 +12,7 @@ import time
 import math
 from nlpaug.augmenter.word import SynonymAug
 import gc
+import psutil
 
 # NLP
 import nltk
@@ -341,7 +342,8 @@ def test_model_bert_unoptimized(tokenizer, model, texts, i2w):
     return results
 
 def eval_model_bert_unoptimized(model, val_loader, i2w):
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu'
     model.to(device)
     model.eval()
     torch.set_grad_enabled(False)
@@ -375,15 +377,15 @@ def eval_model_bert_unoptimized(model, val_loader, i2w):
     return list_hyp_unoptimized, list_label_unoptimized
 
 def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w):
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu'  # Menggunakan CPU
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=5e-5)
     n_epochs = 3
 
     # Hitung ukuran batch secara manual
-    train_batch_size = int(len(train_loader.dataset) * 0.1)  # Menggunakan 10% dari ukuran dataset sebagai batch size
-    val_batch_size = int(len(val_loader.dataset) * 0.1)
-    test_batch_size = int(len(test_loader.dataset) * 0.1)
+    train_batch_size = int(len(train_loader.dataset) * 0.05)  # Menggunakan 5% dari ukuran dataset sebagai batch size
+    val_batch_size = int(len(val_loader.dataset) * 0.05)
+    test_batch_size = int(len(test_loader.dataset) * 0.05)
 
     history = defaultdict(list)
     patience = 2
@@ -415,6 +417,12 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             del batch_data, batch_hyp, batch_label, loss
             torch.cuda.empty_cache()
 
+            # Memantau penggunaan memori
+            mem_usage = psutil.virtual_memory().used / (1024.0 ** 3)  # Dalam GB
+            if mem_usage > 3.0:  # Atur batas penggunaan memori sesuai kebutuhan
+                st.error(f"Penggunaan memori melebihi batas ({mem_usage:.2f} GB). Proses evaluasi dihentikan.")
+                return
+
         metrics = document_sentiment_metrics_fn(list_hyp_train, list_label)
         st.write(f"(Epoch {epoch+1}) TRAIN LOSS: {total_train_loss/train_batch_size:.4f} {metrics_to_string(metrics)}")
         history['train_acc'].append(metrics['ACC'])
@@ -438,6 +446,12 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
                 # Hapus tensor yang tidak diperlukan untuk membebaskan memori
                 del batch_data, batch_hyp, batch_label, loss
                 torch.cuda.empty_cache()
+
+                # Memantau penggunaan memori
+                mem_usage = psutil.virtual_memory().used / (1024.0 ** 3)  # Dalam GB
+                if mem_usage > 3.0:  # Atur batas penggunaan memori sesuai kebutuhan
+                    st.error(f"Penggunaan memori melebihi batas ({mem_usage:.2f} GB). Proses evaluasi dihentikan.")
+                    return
 
         metrics = document_sentiment_metrics_fn(list_hyp, list_label)
         st.write(f"(Epoch {epoch+1}) VALID LOSS: {total_val_loss/val_batch_size:.4f} {metrics_to_string(metrics)}")
@@ -481,6 +495,12 @@ def eval_model_bert_finetuned(model, train_loader, val_loader, test_loader, i2w)
             # Hapus tensor yang tidak diperlukan untuk membebaskan memori
             del batch_data, batch_hyp, batch_label, loss
             torch.cuda.empty_cache()
+
+            # Memantau penggunaan memori
+            mem_usage = psutil.virtual_memory().used / (1024.0 ** 3)  # Dalam GB
+            if mem_usage > 3.0:  # Atur batas penggunaan memori sesuai kebutuhan
+                st.error(f"Penggunaan memori melebihi batas ({mem_usage:.2f} GB). Proses evaluasi dihentikan.")
+                return
 
     metrics = document_sentiment_metrics_fn(list_hyp, list_label)
     st.write(f"TEST LOSS: {total_test_loss/test_batch_size:.4f} {metrics_to_string(metrics)}")
